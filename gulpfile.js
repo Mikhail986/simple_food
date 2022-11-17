@@ -1,4 +1,4 @@
-const { src, dest, watch, parallel, series }  = require('gulp');
+const { src, dest, watch, parallel, series } = require('gulp');
 
 const scss         = require('gulp-sass')(require('sass'));
 const concat       = require('gulp-concat');
@@ -7,6 +7,46 @@ const uglify       = require('gulp-uglify-es').default;
 const imagemin     = require('gulp-imagemin');
 const browserSync  = require('browser-sync').create();
 const del          = require('del');
+const svgSprite    = require('gulp-svg-sprite');
+const cheerio      = require('gulp-cheerio');
+const replace      = require('gulp-replace');
+const fileInclude  = require('gulp-file-include');
+
+
+const htmlInclude = () => {
+  return src(['app/html/*.html']) 
+    .pipe(fileInclude({
+      prefix: '@',
+      basepath: '@file',
+    }))
+    .pipe(dest('app'))
+    .pipe(browserSync.stream());
+}
+
+function svgSprites() {
+  return src('app/images/icons/*.svg')
+    .pipe(cheerio({
+      run: ($) => {
+        $("[fill]").removeAttr("fill");
+        $("[stroke]").removeAttr("stroke");
+        $("[style]").removeAttr("style");
+      },
+      parserOptions: { xmlMode: true },
+    })
+    )
+    .pipe(replace('&gt;', '>'))  
+    .pipe(
+      svgSprite({
+        mode: {
+          stack: {
+            sprite: '../sprite.svg',
+          },
+        },
+      })
+    )
+    .pipe(dest('app/images'));
+}
+
 
 function browsersync(){
 	browserSync.init({
@@ -63,6 +103,7 @@ function styles() {
 	.pipe(browserSync.stream())
 }
 
+
 function build(){
 	return src([
   'app/**/*.html',
@@ -79,6 +120,8 @@ function watching(){
 	watch(['app/scss/**/*.scss'], styles);
 	watch(['app/js/**/*.js', '!app/js/main.min.js'], scripts);
 	watch(['app/**/*.html']).on('change', browserSync.reload);
+  watch(['app/images/icons/*.svg'], svgSprites);
+  watch(['app/html/**/*.html'], htmlInclude);
 }
 
 exports.styles = styles;
@@ -87,6 +130,8 @@ exports.browsersync = browsersync;
 exports.watching = watching;
 exports.images = images;
 exports.cleanDist = cleanDist;
+exports.svgSprites = svgSprites;
+exports.htmlInclude = htmlInclude;
 
 exports.build = series(cleanDist, images, build);
-exports.default = parallel(styles, scripts, browsersync, watching);
+exports.default = parallel(htmlInclude, svgSprites, styles, scripts, browsersync, watching);
